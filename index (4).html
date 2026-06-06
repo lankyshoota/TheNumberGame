@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>THE NUMBER</title>
+  <meta property="og:title" content="THE NUMBER — World vs World">
+  <meta property="og:description" content="One number. Two teams. Whole world fighting. Which side are you on?">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --plus: #00ffaa;
+      --minus: #ff3366;
+      --bg: #080808;
+      --surface: #141414;
+      --border: #222;
+      --text: #f0f0f0;
+      --muted: #555;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── ONBOARDING ── */
+    #onboarding {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 36px;
+      padding: 24px;
+      transition: opacity 0.4s;
+      overflow-y: auto;
+    }
+    #onboarding.hide { opacity: 0; pointer-events: none; }
+
+    .ob-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(48px, 12vw, 96px);
+      letter-spacing: 8px;
+      text-align: center;
+      line-height: 1;
+    }
+    .ob-sub { font-size: 12px; letter-spacing: 4px; color: var(--muted); text-align: center; }
+
+    .ob-username-wrap { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 340px; }
+    .ob-label { font-size: 10px; letter-spacing: 4px; color: var(--muted); }
+    .ob-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 16px;
+      letter-spacing: 2px;
+      padding: 14px 16px;
+      outline: none;
+      border-radius: 2px;
+      transition: border-color 0.2s;
+      text-transform: uppercase;
+    }
+    .ob-input:focus { border-color: var(--text); }
+    .ob-input.error { border-color: var(--minus); }
+    .ob-error { font-size: 10px; color: var(--minus); letter-spacing: 2px; min-height: 14px; }
+
+    .ob-team-label { font-size: 10px; letter-spacing: 4px; color: var(--muted); text-align: center; }
+    .ob-teams { display: flex; gap: 16px; width: 100%; max-width: 340px; }
+    .ob-team-btn {
+      flex: 1; padding: 20px 12px;
+      border: 2px solid var(--border);
+      background: transparent;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 28px; letter-spacing: 4px;
+      cursor: pointer; border-radius: 2px;
+      transition: all 0.2s; color: var(--muted);
+      touch-action: manipulation;
+    }
+    .ob-team-btn .team-sub { font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 3px; display: block; margin-top: 4px; }
+    .ob-team-btn.plus:hover, .ob-team-btn.plus.selected { color: var(--plus); border-color: var(--plus); box-shadow: 0 0 24px rgba(0,255,170,0.2); }
+    .ob-team-btn.minus:hover, .ob-team-btn.minus.selected { color: var(--minus); border-color: var(--minus); box-shadow: 0 0 24px rgba(255,51,102,0.2); }
+
+    .ob-join-btn {
+      width: 100%; max-width: 340px;
+      padding: 16px;
+      background: var(--text); color: var(--bg);
+      border: none;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 22px; letter-spacing: 6px;
+      cursor: pointer; border-radius: 2px;
+      transition: opacity 0.2s;
+      touch-action: manipulation;
+    }
+    .ob-join-btn:hover { opacity: 0.85; }
+    .ob-join-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* ── MAIN GAME ── */
+    #game { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+
+    .topbar {
+      width: 100%;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px; letter-spacing: 3px; color: var(--muted);
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--plus); display: inline-block; margin-right: 6px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+    .user-info { display: flex; align-items: center; gap: 10px; }
+    .user-team-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .user-team-dot.plus { background: var(--plus); }
+    .user-team-dot.minus { background: var(--minus); }
+
+    .main {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 28px; padding: 32px 24px;
+      width: 100%; max-width: 640px; margin: 0 auto;
+    }
+
+    /* Number */
+    .number-wrap { position: relative; text-align: center; }
+    .num-glow { position: absolute; inset: -60px; border-radius: 50%; filter: blur(80px); opacity: 0.12; transition: background 0.5s; pointer-events: none; }
+    .num-glow.pos { background: var(--plus); }
+    .num-glow.neg { background: var(--minus); }
+    .num-glow.zer { background: #fff; }
+
+    #the-number {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(72px, 18vw, 148px);
+      line-height: 1; letter-spacing: -2px;
+      transition: color 0.3s; position: relative; z-index: 1;
+    }
+    #the-number.pos { color: var(--plus); text-shadow: 0 0 50px rgba(0,255,170,.35); }
+    #the-number.neg { color: var(--minus); text-shadow: 0 0 50px rgba(255,51,102,.35); }
+    #the-number.zer { color: var(--text); }
+    #the-number.bump { animation: bump .15s ease-out; }
+    @keyframes bump { 0%{transform:scale(1)} 50%{transform:scale(1.07)} 100%{transform:scale(1)} }
+
+    /* Stats */
+    .stats { display: flex; gap: 24px; align-items: center; font-size: 11px; color: var(--muted); letter-spacing: 2px; }
+    .stat { text-align: center; }
+    .stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; }
+    .stat-val.p { color: var(--plus); }
+    .stat-val.m { color: var(--minus); }
+    .stat-lbl { font-size: 9px; letter-spacing: 3px; margin-top: 2px; }
+    .sdiv { width: 1px; height: 36px; background: var(--border); }
+
+    /* Click button — touch-action critical for iOS */
+    .click-btn {
+      width: 152px; height: 152px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      background: transparent;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 26px; letter-spacing: 4px;
+      cursor: pointer;
+      transition: box-shadow .15s, transform .1s;
+      position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .click-btn.plus { color: var(--plus); }
+    .click-btn.minus { color: var(--minus); }
+    .click-btn:hover { box-shadow: 0 0 32px currentColor; }
+    .click-btn:active { transform: scale(.92); }
+    .btn-sym { font-size: 52px; line-height: 1; pointer-events: none; }
+    .btn-lbl { font-size: 10px; letter-spacing: 3px; pointer-events: none; }
+
+    /* Particle */
+    .particle {
+      position: fixed; pointer-events: none;
+      font-family: 'Bebas Neue', sans-serif; font-size: 22px;
+      z-index: 999; animation: floatUp .9s ease-out forwards;
+    }
+    @keyframes floatUp { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-90px) scale(.4)} }
+
+    /* Timer */
+    .timer-wrap { width: 100%; max-width: 400px; text-align: center; }
+    .timer-lbl { font-size: 9px; letter-spacing: 4px; color: var(--muted); margin-bottom: 8px; }
+    .timer-track { width: 100%; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+    .timer-bar { height: 100%; background: var(--text); transition: width 1s linear, background .5s; border-radius: 1px; }
+    #timer-txt { font-size: 12px; color: var(--muted); margin-top: 8px; letter-spacing: 2px; }
+
+    /* Records */
+    .records { width: 100%; max-width: 400px; border: 1px solid var(--border); border-radius: 2px; padding: 16px 20px; }
+    .records-title { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 4px; color: var(--muted); margin-bottom: 12px; }
+    .record-row { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 2px; padding: 5px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
+    .record-row:last-child { border-bottom: none; }
+    .record-val { font-family: 'Bebas Neue', sans-serif; font-size: 15px; }
+    .record-val.p { color: var(--plus); }
+    .record-val.m { color: var(--minus); }
+
+    /* Leaderboard */
+    .leaderboard { width: 100%; max-width: 400px; border: 1px solid var(--border); border-radius: 2px; padding: 16px 20px; }
+    .lb-title { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 4px; color: var(--muted); margin-bottom: 12px; }
+    .lb-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 11px; letter-spacing: 2px; }
+    .lb-row:last-child { border-bottom: none; }
+    .lb-rank { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--muted); width: 24px; }
+    .lb-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .lb-dot.plus { background: var(--plus); }
+    .lb-dot.minus { background: var(--minus); }
+    .lb-name { flex: 1; color: var(--text); }
+    .lb-clicks { font-family: 'Bebas Neue', sans-serif; font-size: 16px; color: var(--muted); }
+    .lb-empty { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-align: center; padding: 12px 0; }
+
+    /* Bottom */
+    .bottom-row { display: flex; gap: 12px; width: 100%; max-width: 400px; }
+    .share-btn {
+      flex: 1; padding: 12px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Bebas Neue', sans-serif; font-size: 14px; letter-spacing: 4px;
+      cursor: pointer; border-radius: 2px; transition: all .2s;
+      touch-action: manipulation;
+    }
+    .share-btn:hover { border-color: var(--text); }
+
+    .last-win { font-size: 10px; color: var(--muted); letter-spacing: 3px; text-align: center; }
+    .last-win span { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 3px; }
+    .last-win .wp { color: var(--plus); }
+    .last-win .wm { color: var(--minus); }
+
+    /* Winner overlay */
+    .w-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 300; opacity: 0; pointer-events: none; transition: opacity .5s; }
+    .w-overlay.show { opacity: 1; pointer-events: all; }
+    .w-big { font-family: 'Bebas Neue', sans-serif; font-size: clamp(56px,14vw,112px); letter-spacing: 8px; animation: glitch .3s infinite; }
+    .w-sub { font-size: 13px; letter-spacing: 5px; color: var(--muted); margin-top: 16px; }
+    @keyframes glitch { 0%,90%,100%{transform:translate(0)} 92%{transform:translate(-3px,1px)} 94%{transform:translate(3px,-1px)} 96%{transform:translate(-1px,2px)} }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); padding: 12px 24px; font-size: 11px; letter-spacing: 3px; border-radius: 2px; z-index: 400; opacity: 0; transition: opacity .3s; white-space: nowrap; }
+    .toast.show { opacity: 1; }
+
+    @media(max-width:480px) {
+      .click-btn { width: 128px; height: 128px; }
+      .stats { gap: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ONBOARDING -->
+<div id="onboarding">
+  <div>
+    <div class="ob-title">THE NUMBER</div>
+    <div class="ob-sub" style="margin-top:8px">ONE NUMBER. TWO TEAMS. WHOLE WORLD.</div>
+  </div>
+  <div class="ob-username-wrap">
+    <div class="ob-label">YOUR USERNAME</div>
+    <input class="ob-input" id="ob-username" maxlength="20" placeholder="ENTER NAME..." autocomplete="off" spellcheck="false">
+    <div class="ob-error" id="ob-error"></div>
+  </div>
+  <div style="width:100%;max-width:340px">
+    <div class="ob-team-label" style="margin-bottom:12px">PICK YOUR SIDE</div>
+    <div class="ob-teams">
+      <button class="ob-team-btn plus" id="ob-plus" onclick="selectTeam('plus')">+1<span class="team-sub">PUSH IT UP</span></button>
+      <button class="ob-team-btn minus" id="ob-minus" onclick="selectTeam('minus')">−1<span class="team-sub">DRAG IT DOWN</span></button>
+    </div>
+  </div>
+  <button class="ob-join-btn" id="ob-join" onclick="joinGame()" disabled>JOIN THE BATTLE</button>
+</div>
+
+<!-- GAME -->
+<div id="game">
+  <div class="topbar">
+    <div><span class="live-dot"></span><span id="online-count">... ONLINE</span></div>
+    <div class="user-info">
+      <div class="user-team-dot" id="user-dot"></div>
+      <span id="user-display">—</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="number-wrap">
+      <div class="num-glow zer" id="num-glow"></div>
+      <div id="the-number" class="zer">0</div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val p" id="plus-cnt">0</div><div class="stat-lbl">+ CLICKS TODAY</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="stat-val" id="total-cnt">0</div><div class="stat-lbl">TOTAL</div></div>
+      <div class="sdiv"></div>
+      <div class="stat"><div class="stat-val m" id="minus-cnt">0</div><div class="stat-lbl">− CLICKS TODAY</div></div>
+    </div>
+
+    <button class="click-btn plus" id="click-btn">
+      <div class="btn-sym" id="btn-sym">+</div>
+      <div class="btn-lbl" id="btn-lbl">PUSH UP</div>
+    </button>
+
+    <div class="timer-wrap">
+      <div class="timer-lbl">RESETS AT MIDNIGHT — WINNER TAKES THE DAY</div>
+      <div class="timer-track"><div class="timer-bar" id="timer-bar" style="width:100%"></div></div>
+      <div id="timer-txt">--:--:--</div>
+    </div>
+
+    <div class="records">
+      <div class="records-title">ALL TIME RECORDS</div>
+      <div class="record-row"><span>HIGHEST EVER</span><span class="record-val p" id="rec-high">0</span></div>
+      <div class="record-row"><span>LOWEST EVER</span><span class="record-val m" id="rec-low">0</span></div>
+      <div class="record-row"><span>+ TEAM WINS</span><span class="record-val p" id="rec-pwins">0</span></div>
+      <div class="record-row"><span>− TEAM WINS</span><span class="record-val m" id="rec-mwins">0</span></div>
+    </div>
+
+    <div class="leaderboard">
+      <div class="lb-title">TOP CLICKERS — ALL TIME</div>
+      <div id="lb-list"><div class="lb-empty">BE THE FIRST ON THE BOARD</div></div>
+    </div>
+
+    <div class="bottom-row">
+      <button class="share-btn" onclick="shareGame()">📣 SHARE</button>
+    </div>
+
+    <div class="last-win" id="last-win" style="display:none">
+      YESTERDAY: <span id="last-win-txt"></span> WON
+    </div>
+  </div>
+</div>
+
+<div class="w-overlay" id="w-overlay">
+  <div class="w-big" id="w-big">+ WINS</div>
+  <div class="w-sub">NEW BATTLE BEGINS NOW</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const SUPABASE_URL = 'https://jdzocjhmgtdikwncxbuu.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impkem9jamhtZ3RkaWt3bmN4YnV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2ODM0MDYsImV4cCI6MjA5NjI1OTQwNn0.6WSXPWNEQtPbuRSV12ETTk4m_SF2mvrbi00Gn6fuAic';
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const BAD_WORDS = ['nigger','nigga','faggot','retard','cunt','fuck','shit','bitch','dick','pussy','cock','whore','slut'];
+  function isBadUsername(n) { return BAD_WORDS.some(w => n.toLowerCase().includes(w)); }
+
+  let username = localStorage.getItem('tng_username');
+  let team = localStorage.getItem('tng_team');
+  let selectedTeam = null;
+  let clicking = false;
+  let sessionId = localStorage.getItem('tng_session');
+  if (!sessionId) { sessionId = Math.random().toString(36).substr(2,12); localStorage.setItem('tng_session', sessionId); }
+
+  if (username && team) {
+    document.getElementById('onboarding').style.display = 'none';
+    applyTeam(team);
+    document.getElementById('user-display').textContent = username;
+    document.getElementById('user-dot').className = 'user-team-dot ' + team;
+    loadGame();
+  }
+
+  // Onboarding
+  const obInput = document.getElementById('ob-username');
+  const obError = document.getElementById('ob-error');
+  const obJoin = document.getElementById('ob-join');
+
+  obInput.addEventListener('input', () => {
+    obInput.classList.remove('error');
+    obError.textContent = '';
+    obJoin.disabled = !(obInput.value.trim().length >= 2 && selectedTeam);
+  });
+
+  function selectTeam(t) {
+    selectedTeam = t;
+    document.getElementById('ob-plus').classList.toggle('selected', t === 'plus');
+    document.getElementById('ob-minus').classList.toggle('selected', t === 'minus');
+    obJoin.disabled = obInput.value.trim().length < 2;
+  }
+
+  async function joinGame() {
+    const val = obInput.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '');
+    if (val.length < 2) { obError.textContent = 'MIN 2 CHARACTERS'; obInput.classList.add('error'); return; }
+    if (isBadUsername(val)) { obError.textContent = 'KEEP IT CLEAN'; obInput.classList.add('error'); return; }
+    if (!selectedTeam) { obError.textContent = 'PICK A TEAM'; return; }
+
+    obJoin.disabled = true;
+    obJoin.textContent = 'CHECKING...';
+
+    const { data: taken } = await sb.rpc('check_username', { p_username: val });
+    if (taken) {
+      obError.textContent = 'USERNAME TAKEN';
+      obInput.classList.add('error');
+      obJoin.disabled = false;
+      obJoin.textContent = 'JOIN THE BATTLE';
+      return;
+    }
+
+    username = val; team = selectedTeam;
+    localStorage.setItem('tng_username', username);
+    localStorage.setItem('tng_team', team);
+    document.getElementById('onboarding').classList.add('hide');
+    setTimeout(() => document.getElementById('onboarding').style.display = 'none', 400);
+    applyTeam(team);
+    document.getElementById('user-display').textContent = username;
+    document.getElementById('user-dot').className = 'user-team-dot ' + team;
+    loadGame();
+  }
+
+  function applyTeam(t) {
+    const btn = document.getElementById('click-btn');
+    document.getElementById('btn-sym').textContent = t === 'plus' ? '+' : '−';
+    document.getElementById('btn-lbl').textContent = t === 'plus' ? 'PUSH UP' : 'PUSH DOWN';
+    btn.className = 'click-btn ' + t;
+  }
+
+  function updateNumberUI(n) {
+    const el = document.getElementById('the-number');
+    el.textContent = n > 0 ? '+' + n.toLocaleString() : n.toLocaleString();
+    el.className = n > 0 ? 'pos' : n < 0 ? 'neg' : 'zer';
+    document.getElementById('num-glow').className = 'num-glow ' + (n > 0 ? 'pos' : n < 0 ? 'neg' : 'zer');
+  }
+
+  function bump() {
+    const el = document.getElementById('the-number');
+    el.classList.remove('bump');
+    void el.offsetWidth;
+    el.classList.add('bump');
+  }
+
+  function spawnParticle(x, y) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.textContent = team === 'plus' ? '+1' : '−1';
+    p.style.color = team === 'plus' ? 'var(--plus)' : 'var(--minus)';
+    p.style.left = (x - 15) + 'px';
+    p.style.top = (y - 20) + 'px';
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 900);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // ── CLICK HANDLER — using touchend for iOS, no double-tap zoom ──
+  const clickBtn = document.getElementById('click-btn');
+
+  function doClick(x, y) {
+    if (clicking) return;
+    clicking = true;
+    spawnParticle(x, y);
+    bump();
+
+    const delta = team === 'plus' ? 1 : -1;
+    const cur = parseInt(document.getElementById('the-number').textContent.replace(/[^-0-9]/g, '')) || 0;
+    updateNumberUI(cur + delta);
+
+    sb.rpc('click_number', {
+      delta,
+      plus_delta: team === 'plus' ? 1 : 0,
+      minus_delta: team === 'minus' ? 1 : 0,
+      p_username: username
+    }).then(async ({ error }) => {
+      if (error) { console.error(error); updateNumberUI(cur); clicking = false; return; }
+
+      // Update all time records
+      const { data: rec } = await sb.from('all_time_records').select('highest_number, lowest_number').eq('id', 1).single();
+      if (rec) {
+        const newNum = cur + delta;
+        const updates = {};
+        if (newNum > rec.highest_number) { updates.highest_number = newNum; updates.highest_date = new Date().toISOString().split('T')[0]; }
+        if (newNum < rec.lowest_number) { updates.lowest_number = newNum; updates.lowest_date = new Date().toISOString().split('T')[0]; }
+        if (Object.keys(updates).length > 0) {
+          await sb.from('all_time_records').update(updates).eq('id', 1);
+          if (updates.highest_number) document.getElementById('rec-high').textContent = '+' + updates.highest_number.toLocaleString();
+          if (updates.lowest_number) document.getElementById('rec-low').textContent = updates.lowest_number.toLocaleString();
+        }
+      }
+      clicking = false;
+    });
+  }
+
+  // Touch handler (iOS fix — touchend prevents double-tap zoom)
+  clickBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    doClick(touch.clientX, touch.clientY);
+  }, { passive: false });
+
+  // Mouse handler for desktop
+  clickBtn.addEventListener('click', (e) => {
+    if (e.sourceCapabilities && !e.sourceCapabilities.firesTouchEvents) {
+      doClick(e.clientX, e.clientY);
+    } else if (!('ontouchstart' in window)) {
+      doClick(e.clientX, e.clientY);
+    }
+  });
+
+  async function loadGame() {
+    const { data: gs } = await sb.from('game_state').select('*').eq('id', 1).single();
+    if (gs) {
+      updateNumberUI(gs.current_number);
+      document.getElementById('plus-cnt').textContent = gs.plus_clicks.toLocaleString();
+      document.getElementById('minus-cnt').textContent = gs.minus_clicks.toLocaleString();
+      document.getElementById('total-cnt').textContent = (gs.plus_clicks + gs.minus_clicks).toLocaleString();
+      if (gs.last_winner) {
+        document.getElementById('last-win').style.display = 'block';
+        const lwt = document.getElementById('last-win-txt');
+        lwt.textContent = gs.last_winner === 'plus' ? '+1 TEAM' : '−1 TEAM';
+        lwt.className = gs.last_winner === 'plus' ? 'wp' : 'wm';
+      }
+    }
+
+    const { data: rec } = await sb.from('all_time_records').select('*').eq('id', 1).single();
+    if (rec) {
+      document.getElementById('rec-high').textContent = rec.highest_number >= 0 ? '+' + rec.highest_number.toLocaleString() : rec.highest_number.toLocaleString();
+      document.getElementById('rec-low').textContent = rec.lowest_number.toLocaleString();
+      document.getElementById('rec-pwins').textContent = rec.plus_wins;
+      document.getElementById('rec-mwins').textContent = rec.minus_wins;
+    }
+
+    loadLeaderboard();
+
+    // Realtime game state
+    sb.channel('gs_rt')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_state' }, (payload) => {
+        const d = payload.new;
+        updateNumberUI(d.current_number);
+        bump();
+        document.getElementById('plus-cnt').textContent = d.plus_clicks.toLocaleString();
+        document.getElementById('minus-cnt').textContent = d.minus_clicks.toLocaleString();
+        document.getElementById('total-cnt').textContent = (d.plus_clicks + d.minus_clicks).toLocaleString();
+        // Check if a reset just happened (clicks went back to 0)
+        if (d.plus_clicks === 0 && d.minus_clicks === 0 && d.last_winner) {
+          showWinnerOverlay(d.last_winner);
+          loadRecords();
+        }
+      })
+      .subscribe();
+
+    // Realtime leaderboard
+    sb.channel('lb_rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leaderboard' }, () => loadLeaderboard())
+      .subscribe();
+
+    // Realtime records
+    sb.channel('rec_rt')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'all_time_records' }, (payload) => {
+        const r = payload.new;
+        document.getElementById('rec-high').textContent = r.highest_number >= 0 ? '+' + r.highest_number.toLocaleString() : r.highest_number.toLocaleString();
+        document.getElementById('rec-low').textContent = r.lowest_number.toLocaleString();
+        document.getElementById('rec-pwins').textContent = r.plus_wins;
+        document.getElementById('rec-mwins').textContent = r.minus_wins;
+      })
+      .subscribe();
+
+    // Start presence ping
+    startPresence();
+  }
+
+  async function loadRecords() {
+    const { data: rec } = await sb.from('all_time_records').select('*').eq('id', 1).single();
+    if (rec) {
+      document.getElementById('rec-high').textContent = rec.highest_number >= 0 ? '+' + rec.highest_number.toLocaleString() : rec.highest_number.toLocaleString();
+      document.getElementById('rec-low').textContent = rec.lowest_number.toLocaleString();
+      document.getElementById('rec-pwins').textContent = rec.plus_wins;
+      document.getElementById('rec-mwins').textContent = rec.minus_wins;
+    }
+  }
+
+  async function loadLeaderboard() {
+    const { data } = await sb.from('leaderboard').select('username,team,total_clicks').order('total_clicks', { ascending: false }).limit(10);
+    const list = document.getElementById('lb-list');
+    if (!data || data.length === 0) { list.innerHTML = '<div class="lb-empty">BE THE FIRST ON THE BOARD</div>'; return; }
+    list.innerHTML = data.map((row, i) => `
+      <div class="lb-row">
+        <div class="lb-rank">${i + 1}</div>
+        <div class="lb-dot ${row.team}"></div>
+        <div class="lb-name">${row.username}</div>
+        <div class="lb-clicks">${row.total_clicks.toLocaleString()}</div>
+      </div>
+    `).join('');
+  }
+
+  function showWinnerOverlay(winner) {
+    const wo = document.getElementById('w-overlay');
+    const wb = document.getElementById('w-big');
+    wb.textContent = winner === 'plus' ? '+ WINS' : '− WINS';
+    wb.style.color = winner === 'plus' ? 'var(--plus)' : 'var(--minus)';
+    wo.classList.add('show');
+    setTimeout(() => wo.classList.remove('show'), 4000);
+  }
+
+  // Presence — ping every 15 seconds, shows real online count
+  async function pingPresence() {
+    const { data } = await sb.rpc('ping_presence', { p_session_id: sessionId, p_username: username || 'anonymous' });
+    if (data !== null) document.getElementById('online-count').textContent = data + ' ONLINE';
+  }
+
+  function startPresence() {
+    pingPresence();
+    setInterval(pingPresence, 15000);
+  }
+
+  // Timer
+  function updateTimer() {
+    const now = new Date();
+    const midnight = new Date(); midnight.setHours(24,0,0,0);
+    const diff = midnight - now;
+    const total = 24*60*60*1000;
+    const pct = ((total - diff) / total) * 100;
+    document.getElementById('timer-bar').style.width = pct + '%';
+    document.getElementById('timer-bar').style.background = pct > 80 ? 'var(--minus)' : pct > 50 ? '#ffaa00' : 'var(--text)';
+    const h = Math.floor(diff/3600000);
+    const m = Math.floor((diff%3600000)/60000);
+    const s = Math.floor((diff%60000)/1000);
+    document.getElementById('timer-txt').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} LEFT`;
+  }
+  setInterval(updateTimer, 1000);
+  updateTimer();
+
+  function shareGame() {
+    const num = document.getElementById('the-number').textContent;
+    const side = team === 'plus' ? '+1' : '−1';
+    const winning = (team === 'plus' && !num.startsWith('-')) || (team === 'minus' && num.startsWith('-'));
+    const msg = `I'm Team ${side} on THE NUMBER — we're ${winning ? 'WINNING' : 'LOSING'} at ${num}. Come fight us 👉 https://lankyshoota.github.io/TheNumberGame`;
+    if (navigator.share) {
+      navigator.share({ title: 'THE NUMBER', text: msg });
+    } else {
+      navigator.clipboard.writeText(msg).then(() => showToast('COPIED TO CLIPBOARD'));
+    }
+  }
+</script>
+</body>
+</html>
