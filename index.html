@@ -635,6 +635,13 @@
     const s = Math.floor((diff%60000)/1000);
     document.getElementById('timer-txt').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} LEFT`;
   }
+let lastTap = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTap < 300) e.preventDefault();
+  lastTap = now;
+}, { passive: false });
+  
   setInterval(updateTimer, 1000);
   updateTimer();
 
