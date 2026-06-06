@@ -255,8 +255,9 @@
     </div>
   </div>
 
-  <button class="entry-btn primary" id="guest-join-btn" onclick="joinAsGuest()" disabled>LET'S GO</button>
-  <span class="s-link" onclick="showScreen('screen-landing')">← BACK</span>
+<button class="entry-btn primary" id="login-btn" onclick="doLogin()">LOG IN</button>
+<span class="s-link" onclick="doForgotPassword()">FORGOT PASSWORD?</span>
+<span class="s-link" onclick="showScreen('screen-landing')">← BACK</span>
 </div>
 
 <!-- ── SCREEN 3: LOGIN ── -->
@@ -497,6 +498,15 @@
   }
 
   // ── LOGIN FLOW ──
+async function doForgotPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) { document.getElementById('login-error').textContent = 'ENTER YOUR EMAIL FIRST'; return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://lankyshoota.github.io/TheNumberGame'
+  });
+  if (error) { document.getElementById('login-error').textContent = error.message.toUpperCase(); return; }
+  showToast('RESET LINK SENT — CHECK YOUR EMAIL');
+}
   async function doLogin() {
     const email = document.getElementById('login-email').value.trim();
     const pass = document.getElementById('login-password').value;
